@@ -402,6 +402,36 @@ pub struct Opt {
     /// See STYLES section. Defaults to hunk-header-file-path-style.
     pub grep_file_style: Option<String>,
 
+    #[arg(
+        long = "grep-hunk-header-decoration-style",
+        default_value = "none",
+        value_name = "STYLE"
+    )]
+    /// Style string for the hunk-header decoration in grep output.
+    ///
+    /// See hunk-header-decoration-style.
+    pub grep_hunk_header_decoration_style: String,
+
+    #[arg(
+        long = "grep-hunk-header-file-style",
+        default_value = "magenta",
+        value_name = "STYLE"
+    )]
+    /// Style string for the file path part of the hunk-header in grep output.
+    ///
+    /// See hunk_header_file_style.
+    pub grep_hunk_header_file_style: String,
+
+    #[arg(
+        long = "grep-hunk-header-style",
+        default_value = "file syntax",
+        value_name = "STYLE"
+    )]
+    /// Style string for the hunk-header in grep output.
+    ///
+    /// See hunk_header_style.
+    pub grep_hunk_header_style: String,
+
     #[arg(long = "grep-line-number-style", value_name = "STYLE")]
     /// Style string for line numbers in grep output.
     ///

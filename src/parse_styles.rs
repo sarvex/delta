@@ -323,6 +323,16 @@ fn make_commit_file_hunk_header_styles(opt: &cli::Opt, styles: &mut HashMap<&str
             ),
         ),
         (
+            "grep-hunk-header-style",
+            style_from_str_with_handling_of_special_decoration_attributes(
+                &opt.grep_hunk_header_style,
+                None,
+                Some(&opt.grep_hunk_header_decoration_style),
+                true_color,
+                opt.git_config(),
+            ),
+        ),
+        (
             "hunk-header-style",
             style_from_str_with_handling_of_special_decoration_attributes(
                 &opt.hunk_header_style,
@@ -336,6 +346,16 @@ fn make_commit_file_hunk_header_styles(opt: &cli::Opt, styles: &mut HashMap<&str
             "hunk-header-file-style",
             style_from_str_with_handling_of_special_decoration_attributes(
                 &opt.hunk_header_file_style,
+                None,
+                None,
+                true_color,
+                opt.git_config(),
+            ),
+        ),
+        (
+            "grep-hunk-header-file-style",
+            style_from_str_with_handling_of_special_decoration_attributes(
+                &opt.grep_hunk_header_file_style,
                 None,
                 None,
                 true_color,

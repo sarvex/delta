@@ -28,7 +28,7 @@ pub enum State {
     SubmoduleShort(String), // In a submodule section, with gitconfig diff.submodule = short
     Blame(String), // In a line of `git blame` output (key).
     GitShowFile,  // In a line of `git show $revision:./path/to/file.ext` output
-    Grep,         // In a line of `git grep` output
+    Grep(String), // In a line of `git grep` output (path)
     Unknown,
     // The following elements are created when a line is wrapped to display it:
     HunkZeroWrapped,  // Wrapped unchanged line

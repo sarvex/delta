@@ -465,7 +465,7 @@ impl<'p> Painter<'p> {
             }
             State::Blame(_) => true,
             State::GitShowFile => true,
-            State::Grep => true,
+            State::Grep(_) => true,
             State::Unknown
             | State::CommitMeta
             | State::DiffHeader(_)

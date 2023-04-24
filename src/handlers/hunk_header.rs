@@ -114,6 +114,7 @@ impl<'a> StateMachine<'a> {
             write_hunk_header(
                 code_fragment,
                 line_numbers_and_hunk_lengths,
+                None,
                 &mut self.painter,
                 line,
                 if self.plus_file == "/dev/null" {
@@ -205,6 +206,7 @@ fn write_hunk_header_raw(
 pub fn write_hunk_header(
     code_fragment: &str,
     line_numbers_and_hunk_lengths: &[(usize, usize)],
+    style_sections: Option<StyleSectionSpecifier>,
     painter: &mut Painter,
     line: &str,
     plus_file: &str,
@@ -225,7 +227,13 @@ pub fn write_hunk_header(
         paint_file_path_with_line_number(Some(plus_line_number), plus_file, config);
 
     if !line.is_empty() || !file_with_line_number.is_empty() {
-        write_to_output_buffer(&file_with_line_number, line, painter, config);
+        write_to_output_buffer(
+            &file_with_line_number,
+            line,
+            style_sections,
+            painter,
+            config,
+        );
         draw_fn(
             painter.writer,
             &painter.output_buffer,
@@ -276,6 +284,7 @@ fn paint_file_path_with_line_number(
 fn write_to_output_buffer(
     file_with_line_number: &str,
     line: String,
+    style_sections: Option<StyleSectionSpecifier>,
     painter: &mut Painter,
     config: &Config,
 ) {
@@ -298,7 +307,7 @@ fn write_to_output_buffer(
     if !line.is_empty() {
         painter.syntax_highlight_and_paint_line(
             &line,
-            StyleSectionSpecifier::Style(config.hunk_header_style),
+            style_sections.unwrap_or(StyleSectionSpecifier::Style(config.hunk_header_style)),
             delta::State::HunkHeader(
                 DiffType::Unified,
                 ParsedHunkHeader::default(),
