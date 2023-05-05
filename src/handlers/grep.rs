@@ -7,7 +7,7 @@ use serde::Deserialize;
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::ansi;
-use crate::config::Config;
+use crate::config::{HunkHeaderIncludeFilePath, HunkHeaderIncludeLineNumber};
 use crate::delta::{State, StateMachine};
 use crate::handlers::{self, ripgrep_json};
 use crate::paint::{self, expand_tabs, StyleSectionSpecifier};
@@ -64,31 +64,11 @@ impl<'a> StateMachine<'a> {
                 // Emit syntax-highlighted code
                 self.state = State::Grep(grep_line.path.to_string());
 
-                let header_config = Config {
-                    hunk_header_file_style: self.config.grep_hunk_header_file_style,
-                    hunk_header_style: self.config.grep_hunk_header_style,
-                    hunk_header_style_include_file_path: true,
-                    hunk_header_style_include_line_number: false,
-                    // navigate: false,
-                    // navigate_regex: None,
-                    // file_modified_label: "".to_owned(),
-                    ..(*self.config).clone()
-                };
-                let grep_line_config = Config {
-                    hunk_header_file_style: self.config.grep_hunk_header_file_style,
-                    hunk_header_style: self.config.grep_hunk_header_style,
-                    hunk_header_style_include_file_path: false,
-                    hunk_header_style_include_line_number: true,
-                    navigate: false,
-                    // navigate_regex: None,
-                    // file_modified_label: "".to_owned(),
-                    ..(*self.config).clone()
-                };
                 // Emulate ripgrep output: each section of hits from the same path has a header line,
                 // and sections are separated by a blank line. Set language whenever path changes.
                 if previous_path.is_none() || previous_path.as_deref() != Some(&grep_line.path) {
                     if let Some(lang) = handlers::diff_header::get_extension(&grep_line.path)
-                        .or(header_config.default_language.as_deref())
+                        .or(self.config.default_language.as_deref())
                     {
                         self.painter.set_syntax(Some(lang));
                         self.painter.set_highlighter();
@@ -103,7 +83,10 @@ impl<'a> StateMachine<'a> {
                         &mut self.painter,
                         &self.line,
                         &grep_line.path,
-                        &header_config,
+                        &self.state,
+                        &HunkHeaderIncludeFilePath::Yes,
+                        &HunkHeaderIncludeLineNumber::No,
+                        self.config,
                     )?
                 }
                 match (
@@ -118,9 +101,12 @@ impl<'a> StateMachine<'a> {
                         &mut self.painter,
                         &self.line,
                         &grep_line.path,
+                        &self.state,
+                        &self.config.hunk_header_style_include_file_path,
+                        &self.config.hunk_header_style_include_line_number,
                         self.config,
                     )?,
-                    _ => self._handle_grep_line(&mut grep_line, &grep_line_config)?,
+                    _ => self._handle_grep_line(&mut grep_line)?,
                 }
                 handled_line = true
             }
@@ -128,11 +114,7 @@ impl<'a> StateMachine<'a> {
         Ok(handled_line)
     }
 
-    fn _handle_grep_line(
-        &mut self,
-        grep_line: &mut GrepLine,
-        config: &Config,
-    ) -> std::io::Result<()> {
+    fn _handle_grep_line(&mut self, grep_line: &mut GrepLine) -> std::io::Result<()> {
         let code_style_sections = match (&grep_line.line_type, &grep_line.submatches) {
             (LineType::Match, Some(submatches)) => {
                 // We expand tabs at this late stage because
@@ -142,12 +124,13 @@ impl<'a> StateMachine<'a> {
                 // arm iff we are handling `ripgrep --json`
                 // output.)
                 grep_line.code =
-                    paint::expand_tabs(grep_line.code.graphemes(true), config.tab_width).into();
+                    paint::expand_tabs(grep_line.code.graphemes(true), self.config.tab_width)
+                        .into();
                 make_style_sections(
                     &grep_line.code,
                     submatches,
-                    config.grep_match_word_style,
-                    config.grep_match_line_style,
+                    self.config.grep_match_word_style,
+                    self.config.grep_match_line_style,
                 )
             }
             (LineType::Match, None) => {
@@ -157,16 +140,18 @@ impl<'a> StateMachine<'a> {
                 // enough. But at this point it is guaranteed
                 // that this handler is going to handle this
                 // line, so mutating it is acceptable.
-                self.raw_line = expand_tabs(self.raw_line.graphemes(true), config.tab_width);
+                self.raw_line = expand_tabs(self.raw_line.graphemes(true), self.config.tab_width);
                 get_code_style_sections(
                     &self.raw_line,
-                    config.grep_match_word_style,
-                    config.grep_match_line_style,
+                    self.config.grep_match_word_style,
+                    self.config.grep_match_line_style,
                     grep_line,
                 )
-                .unwrap_or(StyleSectionSpecifier::Style(config.grep_match_line_style))
+                .unwrap_or(StyleSectionSpecifier::Style(
+                    self.config.grep_match_line_style,
+                ))
             }
-            _ => StyleSectionSpecifier::Style(config.grep_context_line_style),
+            _ => StyleSectionSpecifier::Style(self.config.grep_context_line_style),
         };
         handlers::hunk_header::write_hunk_header(
             &grep_line.code,
@@ -175,7 +160,10 @@ impl<'a> StateMachine<'a> {
             &mut self.painter,
             &self.line,
             &grep_line.path,
-            config,
+            &self.state,
+            &HunkHeaderIncludeFilePath::No,
+            &HunkHeaderIncludeLineNumber::Yes,
+            self.config,
         )
     }
 }

@@ -74,8 +74,8 @@ pub struct Config {
     pub handle_merge_conflicts: bool,
     pub hunk_header_file_style: Style,
     pub hunk_header_line_number_style: Style,
-    pub hunk_header_style_include_file_path: bool,
-    pub hunk_header_style_include_line_number: bool,
+    pub hunk_header_style_include_file_path: HunkHeaderIncludeFilePath,
+    pub hunk_header_style_include_line_number: HunkHeaderIncludeLineNumber,
     pub hunk_header_style: Style,
     pub hunk_label: String,
     pub hyperlinks_commit_link_format: Option<String>,
@@ -131,6 +131,18 @@ pub struct Config {
     pub zero_style: Style,
 }
 
+#[cfg_attr(test, derive(Clone))]
+pub enum HunkHeaderIncludeFilePath {
+    Yes,
+    No,
+}
+
+#[cfg_attr(test, derive(Clone))]
+pub enum HunkHeaderIncludeLineNumber {
+    Yes,
+    No,
+}
+
 impl Config {
     pub fn get_style(&self, state: &State) -> &Style {
         match state {
@@ -139,9 +151,17 @@ impl Config {
             State::HunkPlus(_, _) => &self.plus_style,
             State::CommitMeta => &self.commit_style,
             State::DiffHeader(_) => &self.file_style,
+            State::Grep(_) => &self.grep_hunk_header_style,
             State::HunkHeader(_, _, _, _) => &self.hunk_header_style,
             State::SubmoduleLog => &self.file_style,
             _ => delta_unreachable("Unreachable code reached in get_style."),
+        }
+    }
+
+    pub fn get_hunk_header_file_style(&self, state: &State) -> &Style {
+        match state {
+            State::Grep(_) => &self.grep_hunk_header_file_style,
+            _ => &self.hunk_header_file_style,
         }
     }
 
@@ -283,14 +303,24 @@ impl From<cli::Opt> for Config {
             hunk_header_file_style: styles["hunk-header-file-style"],
             hunk_header_line_number_style: styles["hunk-header-line-number-style"],
             hunk_header_style: styles["hunk-header-style"],
-            hunk_header_style_include_file_path: opt
+            hunk_header_style_include_file_path: if opt
                 .hunk_header_style
                 .split(' ')
-                .any(|s| s == "file"),
-            hunk_header_style_include_line_number: opt
+                .any(|s| s == "file")
+            {
+                HunkHeaderIncludeFilePath::Yes
+            } else {
+                HunkHeaderIncludeFilePath::No
+            },
+            hunk_header_style_include_line_number: if opt
                 .hunk_header_style
                 .split(' ')
-                .any(|s| s == "line-number"),
+                .any(|s| s == "line-number")
+            {
+                HunkHeaderIncludeLineNumber::Yes
+            } else {
+                HunkHeaderIncludeLineNumber::No
+            },
             hyperlinks: opt.hyperlinks,
             hyperlinks_commit_link_format: opt.hyperlinks_commit_link_format,
             hyperlinks_file_link_format: opt.hyperlinks_file_link_format,

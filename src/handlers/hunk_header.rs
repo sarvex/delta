@@ -25,10 +25,10 @@ use lazy_static::lazy_static;
 use regex::Regex;
 
 use super::draw;
-use crate::config::Config;
+use crate::config::{Config, HunkHeaderIncludeFilePath, HunkHeaderIncludeLineNumber};
 use crate::delta::{self, DiffType, InMergeConflict, MergeParents, State, StateMachine};
 use crate::paint::{self, BgShouldFill, Painter, StyleSectionSpecifier};
-use crate::style::DecorationStyle;
+use crate::style::{DecorationStyle, Style};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct ParsedHunkHeader {
@@ -122,6 +122,9 @@ impl<'a> StateMachine<'a> {
                 } else {
                     &self.plus_file
                 },
+                &self.state,
+                &self.config.hunk_header_style_include_file_path,
+                &self.config.hunk_header_style_include_line_number,
                 self.config,
             )?;
         };
@@ -203,6 +206,7 @@ fn write_hunk_header_raw(
     Ok(())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn write_hunk_header(
     code_fragment: &str,
     line_numbers_and_hunk_lengths: &[(usize, usize)],
@@ -210,10 +214,26 @@ pub fn write_hunk_header(
     painter: &mut Painter,
     line: &str,
     plus_file: &str,
+    state: &State,
+    include_file_path: &HunkHeaderIncludeFilePath,
+    include_line_number: &HunkHeaderIncludeLineNumber,
     config: &Config,
 ) -> std::io::Result<()> {
+    let file_style = match include_file_path {
+        HunkHeaderIncludeFilePath::Yes => Some(*config.get_hunk_header_file_style(state)),
+        HunkHeaderIncludeFilePath::No => None,
+    };
+    let line_number_style = if matches!(include_line_number, HunkHeaderIncludeLineNumber::Yes)
+        && !config.hunk_header_style.is_raw
+        && !config.color_only
+    {
+        Some(config.hunk_header_line_number_style)
+    } else {
+        None
+    };
+
     let (mut draw_fn, _, decoration_ansi_term_style) =
-        draw::get_draw_function(config.hunk_header_style.decoration_style);
+        draw::get_draw_function(config.get_style(state).decoration_style);
     let line = if config.color_only {
         line.to_string()
     } else if !code_fragment.is_empty() {
@@ -223,8 +243,13 @@ pub fn write_hunk_header(
     };
 
     let plus_line_number = line_numbers_and_hunk_lengths[line_numbers_and_hunk_lengths.len() - 1].0;
-    let file_with_line_number =
-        paint_file_path_with_line_number(Some(plus_line_number), plus_file, config);
+    let file_with_line_number = paint_file_path_with_line_number(
+        Some(plus_line_number),
+        plus_file,
+        file_style,
+        line_number_style,
+        config,
+    );
 
     if !line.is_empty() || !file_with_line_number.is_empty() {
         write_to_output_buffer(
@@ -252,23 +277,10 @@ pub fn write_hunk_header(
 fn paint_file_path_with_line_number(
     line_number: Option<usize>,
     plus_file: &str,
+    file_style: Option<Style>,
+    line_number_style: Option<Style>,
     config: &Config,
 ) -> String {
-    let file_style = if config.hunk_header_style_include_file_path {
-        Some(config.hunk_header_file_style)
-    } else {
-        None
-    };
-    let line_number_style = if config.hunk_header_style_include_line_number
-        && !config.hunk_header_style.is_raw
-        && !config.color_only
-        && line_number.is_some()
-    {
-        Some(config.hunk_header_line_number_style)
-    } else {
-        None
-    };
-
     paint::paint_file_path_with_line_number(
         line_number,
         plus_file,
@@ -276,7 +288,7 @@ fn paint_file_path_with_line_number(
         ":",
         false,
         file_style,
-        line_number_style,
+        line_number.and(line_number_style),
         config,
     )
 }
@@ -401,7 +413,13 @@ pub mod tests {
         // This test confirms that `paint_file_path_with_line_number` returns a painted line number.
         let config = integration_test_utils::make_config_from_args(&[]);
 
-        let result = paint_file_path_with_line_number(Some(3), "some-file", &config);
+        let result = paint_file_path_with_line_number(
+            Some(3),
+            "some-file",
+            Some(config.hunk_header_style),
+            Some(config.hunk_header_line_number_style),
+            &config,
+        );
 
         assert_eq!(result, "\u{1b}[34m3\u{1b}[0m");
     }
@@ -422,8 +440,13 @@ pub mod tests {
         let config = integration_test_utils::make_config_from_args(&["--features", "hyperlinks"]);
         let relative_path = PathBuf::from_iter(["some-dir", "some-file"]);
 
-        let result =
-            paint_file_path_with_line_number(Some(3), &relative_path.to_string_lossy(), &config);
+        let result = paint_file_path_with_line_number(
+            Some(3),
+            &relative_path.to_string_lossy(),
+            Some(config.hunk_header_style),
+            Some(config.hunk_header_line_number_style),
+            &config,
+        );
 
         assert_eq!(
             result,
@@ -447,7 +470,13 @@ pub mod tests {
             "omit",
         ]);
 
-        let result = paint_file_path_with_line_number(Some(3), "some-file", &config);
+        let result = paint_file_path_with_line_number(
+            Some(3),
+            "some-file",
+            Some(config.hunk_header_style),
+            Some(config.hunk_header_line_number_style),
+            &config,
+        );
 
         assert_eq!(result, "");
     }
@@ -467,7 +496,13 @@ pub mod tests {
             "hyperlinks",
         ]);
 
-        let result = paint_file_path_with_line_number(Some(3), "some-file", &config);
+        let result = paint_file_path_with_line_number(
+            Some(3),
+            "some-file",
+            Some(config.hunk_header_style),
+            Some(config.hunk_header_line_number_style),
+            &config,
+        );
 
         assert_eq!(result, "");
     }
@@ -482,7 +517,13 @@ pub mod tests {
             "--navigate",
         ]);
 
-        let result = paint_file_path_with_line_number(Some(3), "δ some-file", &config);
+        let result = paint_file_path_with_line_number(
+            Some(3),
+            "δ some-file",
+            Some(config.hunk_header_style),
+            Some(config.hunk_header_line_number_style),
+            &config,
+        );
 
         assert_eq!(result, "");
     }
