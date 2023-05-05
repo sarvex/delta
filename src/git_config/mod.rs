@@ -15,11 +15,15 @@ pub struct GitConfig {
     config_from_env_var: HashMap<String, String>,
     pub enabled: bool,
     repo: Option<git2::Repository>,
+    // To make GitConfig cloneable when testing (in turn to make Config cloneable):
+    #[cfg(test)]
     path: std::path::PathBuf,
 }
 
+#[cfg(test)]
 impl Clone for GitConfig {
     fn clone(&self) -> Self {
+        assert!(self.repo.is_none());
         GitConfig {
             // Assumes no test modifies the file pointed to by `path`
             config: git2::Config::open(&self.path).unwrap(),
@@ -34,8 +38,6 @@ impl Clone for GitConfig {
 impl GitConfig {
     #[cfg(not(test))]
     pub fn try_create(env: &DeltaEnv) -> Option<Self> {
-        use std::path::PathBuf;
-
         use crate::fatal;
 
         let repo = match &env.current_dir {
@@ -56,7 +58,6 @@ impl GitConfig {
                     config_from_env_var: parse_config_from_env_var(env),
                     repo,
                     enabled: true,
-                    path: PathBuf::default(),
                 })
             }
             None => None,
@@ -86,6 +87,7 @@ impl GitConfig {
                     },
                     repo: None,
                     enabled: true,
+                    #[cfg(test)]
                     path: path.into(),
                 }
             }

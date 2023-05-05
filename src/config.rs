@@ -31,7 +31,7 @@ use crate::wrapping::WrapConfig;
 
 pub const INLINE_SYMBOL_WIDTH_1: usize = 1;
 
-#[derive(Clone)]
+#[cfg_attr(test, derive(Clone))]
 pub struct Config {
     pub available_terminal_width: usize,
     pub background_color_extends_to_terminal_width: bool,
